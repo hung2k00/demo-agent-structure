@@ -1,0 +1,11 @@
+{
+  "name": "smartwms-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter api start:dev",
+    "dev:web": "pnpm --filter web dev",
+    "build:shared": "pnpm --filter shared-types build",
+    "test:agent": "npx tsx scripts/wms-auto-test-agent.ts",
+    "seed:demo": "npx tsx scripts/wms-demo-data-agent.ts"
+  }
+}

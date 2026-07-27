@@ -1,0 +1,132 @@
+// Prisma schema for Warehouse Management System (SmartWMS)
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMIN
+  WAREHOUSE_MANAGER
+  STAFF
+}
+
+enum MovementType {
+  IMPORT
+  EXPORT
+}
+
+enum MovementStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users          User[]
+  suppliers      Supplier[]
+  products       Product[]
+  movements      WarehouseMovement[]
+  movementLogs   StockMovementLog[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  fullName     String
+  passwordHash String
+  role         UserRole @default(ADMIN)
+  tenantId     String
+  createdAt    DateTime @default(now())
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  movements    WarehouseMovement[] @relation("CreatedByUser")
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  code      String
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  tenantId  String
+  createdAt DateTime @default(now())
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  movements WarehouseMovement[]
+
+  @@unique([tenantId, code])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  sku         String
+  name        String
+  category    String
+  unit        String
+  quantity    Int      @default(0)
+  minQuantity Int      @default(5)
+  price       Float
+  description String?
+  tenantId    String
+  createdAt   DateTime @default(now())
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  movementItems WarehouseMovementItem[]
+  movementLogs  StockMovementLog[]
+
+  @@unique([tenantId, sku])
+}
+
+model WarehouseMovement {
+  id          String         @id @default(uuid())
+  code        String         @unique
+  type        MovementType
+  status      MovementStatus @default(PENDING)
+  totalAmount Float
+  note        String?
+  supplierId  String?
+  createdById String
+  tenantId    String
+  createdAt   DateTime       @default(now())
+
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy   User                    @relation("CreatedByUser", fields: [createdById], references: [id])
+  supplier    Supplier?               @relation(fields: [supplierId], references: [id])
+  items       WarehouseMovementItem[]
+  logs        StockMovementLog[]
+}
+
+model WarehouseMovementItem {
+  id         String   @id @default(uuid())
+  movementId String
+  productId  String
+  quantity   Int
+  price      Float
+
+  movement WarehouseMovement @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  product  Product           @relation(fields: [productId], references: [id])
+}
+
+model StockMovementLog {
+  id               String   @id @default(uuid())
+  productId        String
+  movementId       String?
+  quantityChange   Int
+  previousQuantity Int
+  newQuantity      Int
+  refCode          String
+  tenantId         String
+  createdAt        DateTime @default(now())
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product  Product            @relation(fields: [productId], references: [id])
+  movement WarehouseMovement? @relation(fields: [movementId], references: [id])
+}
