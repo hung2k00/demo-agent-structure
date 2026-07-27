@@ -1,7 +1,8 @@
 export declare class CreateProductDto {
     sku: string;
     name: string;
-    category: string;
+    category?: string;
+    categoryId?: string;
     unit: string;
     minQuantity?: number;
     price: number;
@@ -11,6 +12,7 @@ export declare class UpdateProductDto {
     sku?: string;
     name?: string;
     category?: string;
+    categoryId?: string;
     unit?: string;
     minQuantity?: number;
     price?: number;

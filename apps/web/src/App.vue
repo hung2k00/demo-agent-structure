@@ -19,12 +19,16 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Building
+  Building,
+  Tag,
+  Menu,
+  X
 } from '@lucide/vue'
 
 const authStore = useAuthStore()
 const currentView = ref<'register' | 'login' | 'dashboard'>('login')
-const activeTab = ref<'dashboard' | 'products' | 'suppliers' | 'movements' | 'logs' | 'users'>('dashboard')
+const activeTab = ref<'dashboard' | 'products' | 'categories' | 'suppliers' | 'movements' | 'logs' | 'users'>('dashboard')
+const mobileMenuOpen = ref(false)
 
 // State data from Backend
 const stats = ref({
@@ -36,6 +40,7 @@ const stats = ref({
 })
 
 const products = ref<any[]>([])
+const categoriesList = ref<any[]>([])
 const suppliers = ref<any[]>([])
 const movements = ref<any[]>([])
 const logs = ref<any[]>([])
@@ -46,12 +51,13 @@ const globalMessage = ref<{ type: 'success' | 'error'; text: string } | null>(nu
 
 // Modals State
 const showProductModal = ref(false)
+const showCategoryModal = ref(false)
 const showSupplierModal = ref(false)
 const showMovementModal = ref(false)
 
 // Search & Filter
 const searchQuery = ref('')
-const selectedCategory = ref('')
+const selectedCategoryId = ref('')
 const selectedMovementType = ref('')
 
 // Form Models
@@ -59,9 +65,16 @@ const productForm = reactive({
   sku: '',
   name: '',
   category: 'Điện tử',
+  categoryId: '',
   unit: 'Cái',
   price: 0,
   minQuantity: 5,
+  description: ''
+})
+
+const categoryForm = reactive({
+  code: '',
+  name: '',
   description: ''
 })
 
@@ -123,9 +136,10 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
 const loadDashboardData = async () => {
   loadingData.value = true
   try {
-    const [statsRes, productsRes, suppliersRes, movementsRes, logsRes] = await Promise.allSettled([
+    const [statsRes, productsRes, categoriesRes, suppliersRes, movementsRes, logsRes] = await Promise.allSettled([
       apiFetch('/dashboard/stats'),
       apiFetch('/products'),
+      apiFetch('/categories'),
       apiFetch('/suppliers'),
       apiFetch('/movements'),
       apiFetch('/movements/logs/history'),
@@ -133,6 +147,7 @@ const loadDashboardData = async () => {
 
     if (statsRes.status === 'fulfilled') stats.value = statsRes.value
     if (productsRes.status === 'fulfilled') products.value = productsRes.value
+    if (categoriesRes.status === 'fulfilled') categoriesList.value = categoriesRes.value
     if (suppliersRes.status === 'fulfilled') suppliers.value = suppliersRes.value
     if (movementsRes.status === 'fulfilled') movements.value = movementsRes.value
     if (logsRes.status === 'fulfilled') logs.value = logsRes.value
@@ -161,10 +176,12 @@ const showToast = (type: 'success' | 'error', text: string) => {
 // CRUD Operations
 const handleCreateProduct = async () => {
   try {
+    const selectedCat = categoriesList.value.find(c => c.id === productForm.categoryId)
     await apiFetch('/products', {
       method: 'POST',
       body: JSON.stringify({
         ...productForm,
+        category: selectedCat ? selectedCat.name : productForm.category,
         price: Number(productForm.price),
         minQuantity: Number(productForm.minQuantity),
       })
@@ -172,10 +189,26 @@ const handleCreateProduct = async () => {
     showToast('success', 'Thêm sản phẩm mới thành công!')
     showProductModal.value = false
     loadDashboardData()
-    // Reset
     productForm.sku = ''
     productForm.name = ''
     productForm.price = 0
+  } catch (err: any) {
+    showToast('error', err.message)
+  }
+}
+
+const handleCreateCategory = async () => {
+  try {
+    await apiFetch('/categories', {
+      method: 'POST',
+      body: JSON.stringify(categoryForm)
+    })
+    showToast('success', 'Thêm danh mục mới thành công!')
+    showCategoryModal.value = false
+    loadDashboardData()
+    categoryForm.code = ''
+    categoryForm.name = ''
+    categoryForm.description = ''
   } catch (err: any) {
     showToast('error', err.message)
   }
@@ -250,7 +283,7 @@ const handleUpdateUserRole = async (userId: string, newRole: string) => {
 const filteredProducts = computed(() => {
   return products.value.filter(p => {
     const matchesSearch = !searchQuery.value || p.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesCategory = !selectedCategory.value || p.category === selectedCategory.value
+    const matchesCategory = !selectedCategoryId.value || p.categoryId === selectedCategoryId.value || p.category === selectedCategoryId.value
     return matchesSearch && matchesCategory
   })
 })
@@ -263,6 +296,16 @@ const filteredMovements = computed(() => {
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
+}
+
+const tabTitles: Record<string, string> = {
+  dashboard: 'Tổng Quan Bảng Điều Khiển',
+  products: 'Quản Lý Sản Phẩm & Tồn Kho',
+  categories: 'Quản Lý Danh Mục Sản Phẩm',
+  suppliers: 'Quản Lý Nhà Cung Cấp',
+  movements: 'Quản Lý Phiếu Nhập / Xuất Kho',
+  logs: 'Nhật Ký Biến Động Tồn Kho Real-time',
+  users: 'Quản Lý Thành Viên & Phân Quyền'
 }
 </script>
 
@@ -282,7 +325,7 @@ const formatCurrency = (val: number) => {
   />
 
   <!-- Màn Dashboard Admin / Staff -->
-  <div v-else class="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+  <div v-else class="min-h-screen bg-slate-950 text-slate-100 flex font-sans">
     <!-- Global Toast Alert -->
     <div 
       v-if="globalMessage" 
@@ -294,428 +337,544 @@ const formatCurrency = (val: number) => {
       <span>{{ globalMessage.text }}</span>
     </div>
 
-    <!-- Top Header Navigation -->
-    <header class="glass-panel sticky top-0 z-40 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- LEFT SIDEBAR MENU (Hiển thị cho Laptop / Desktop - non-mobile/non-ipad) -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <aside class="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:z-50 bg-slate-900/95 border-r border-slate-800/80 backdrop-blur-xl">
+      <!-- Brand & Store Header -->
+      <div class="p-5 border-b border-slate-800/80 flex items-center space-x-3">
         <div class="p-2.5 bg-indigo-600/20 rounded-xl border border-indigo-500/30 text-indigo-400">
           <Package class="w-6 h-6" />
         </div>
         <div>
-          <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-teal-400">
+          <h1 class="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-teal-400">
             SmartWMS Pro
           </h1>
-          <p class="text-xs text-slate-400 flex items-center space-x-1">
-            <Building class="w-3 h-3 text-indigo-400" />
-            <span>{{ authStore.user?.tenantName || 'Kho Hàng Quản Lý' }}</span>
+          <p class="text-[11px] text-slate-400 flex items-center space-x-1 truncate max-w-[160px]">
+            <Building class="w-3 h-3 text-indigo-400 shrink-0" />
+            <span class="truncate">{{ authStore.user?.tenantName || 'Kho Hàng Quản Lý' }}</span>
           </p>
         </div>
       </div>
 
-      <!-- Navigation Tabs -->
-      <nav class="hidden lg:flex items-center space-x-1 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
+      <!-- Vertical Navigation Menu -->
+      <div class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
         <button 
           @click="activeTab = 'dashboard'"
-          :class="['px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer', activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200']"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'dashboard' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
         >
-          <LayoutDashboard class="w-4 h-4" />
+          <LayoutDashboard class="w-4 h-4 shrink-0" />
           <span>Tổng Quan</span>
         </button>
 
         <button 
           @click="activeTab = 'products'"
-          :class="['px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer', activeTab === 'products' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200']"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'products' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
         >
-          <Boxes class="w-4 h-4" />
+          <Boxes class="w-4 h-4 shrink-0" />
           <span>Sản Phẩm</span>
         </button>
 
         <button 
-          @click="activeTab = 'suppliers'"
-          :class="['px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer', activeTab === 'suppliers' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200']"
+          @click="activeTab = 'categories'"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'categories' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
         >
-          <Truck class="w-4 h-4" />
+          <Tag class="w-4 h-4 shrink-0" />
+          <span>Danh Mục</span>
+        </button>
+
+        <button 
+          @click="activeTab = 'suppliers'"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'suppliers' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
+        >
+          <Truck class="w-4 h-4 shrink-0" />
           <span>Nhà Cung Cấp</span>
         </button>
 
         <button 
           @click="activeTab = 'movements'"
-          :class="['px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer', activeTab === 'movements' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200']"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'movements' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
         >
-          <FileSpreadsheet class="w-4 h-4" />
+          <FileSpreadsheet class="w-4 h-4 shrink-0" />
           <span>Nhập / Xuất Kho</span>
         </button>
 
         <button 
           @click="activeTab = 'logs'"
-          :class="['px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer', activeTab === 'logs' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200']"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'logs' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
         >
-          <History class="w-4 h-4" />
+          <History class="w-4 h-4 shrink-0" />
           <span>Nhật Ký Tồn Kho</span>
         </button>
 
         <button 
           v-if="authStore.user?.role === 'ADMIN'"
           @click="activeTab = 'users'"
-          :class="['px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer', activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200']"
+          :class="['w-full px-4 py-3 rounded-xl text-xs font-semibold transition-all flex items-center space-x-3 cursor-pointer text-left', activeTab === 'users' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200']"
         >
-          <Users class="w-4 h-4" />
+          <Users class="w-4 h-4 shrink-0" />
           <span>Thành Viên</span>
         </button>
-      </nav>
+      </div>
 
-      <!-- User Info & Logout -->
-      <div class="flex items-center space-x-3">
-        <div class="flex items-center space-x-2.5 px-3 py-1.5 glass-panel rounded-xl border border-slate-800">
-          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-sm text-white">
-            {{ authStore.user?.fullName?.charAt(0) || 'U' }}
+      <!-- User Profile Card at Bottom of Sidebar -->
+      <div class="p-4 border-t border-slate-800/80 bg-slate-950/40">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-sm text-white shrink-0 shadow-md">
+              {{ authStore.user?.fullName?.charAt(0) || 'U' }}
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-slate-200 truncate">{{ authStore.user?.fullName }}</p>
+              <p class="text-[10px] text-indigo-400 font-bold uppercase">{{ authStore.user?.role }}</p>
+            </div>
           </div>
-          <div class="text-left hidden md:block">
-            <p class="text-xs font-semibold text-slate-200">{{ authStore.user?.fullName }}</p>
-            <p class="text-[10px] text-indigo-400 font-bold uppercase">{{ authStore.user?.role }}</p>
-          </div>
+
+          <button 
+            @click="handleLogout"
+            title="Đăng xuất"
+            class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all border border-slate-800 cursor-pointer"
+          >
+            <LogOut class="w-4 h-4" />
+          </button>
         </div>
+      </div>
+    </aside>
 
-        <button 
-          @click="handleLogout"
-          title="Đăng xuất"
-          class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all border border-slate-800 cursor-pointer"
-        >
-          <LogOut class="w-4 h-4" />
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- MOBILE / IPAD TOP HEADER & DRAWER (width < 1024px) -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <header class="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-900/95 border-b border-slate-800 px-4 py-3 flex items-center justify-between backdrop-blur-xl">
+      <div class="flex items-center space-x-2.5">
+        <div class="p-2 bg-indigo-600/20 rounded-lg text-indigo-400">
+          <Package class="w-5 h-5" />
+        </div>
+        <span class="text-base font-bold text-white">SmartWMS Pro</span>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button @click="mobileMenuOpen = !mobileMenuOpen" class="p-2 text-slate-300 hover:text-white rounded-lg border border-slate-800">
+          <Menu v-if="!mobileMenuOpen" class="w-5 h-5" />
+          <X v-else class="w-5 h-5" />
         </button>
       </div>
     </header>
 
-    <!-- Main Dynamic Content -->
-    <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
-      <!-- 1. DASHBOARD TAB -->
-      <div v-if="activeTab === 'dashboard'" class="space-y-6">
-        <!-- Stats Row -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-indigo-500/40 transition-all">
-            <div class="flex justify-between items-start mb-3">
-              <span class="text-xs font-medium text-slate-400">Tổng Số Mặt Hàng</span>
-              <div class="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                <Boxes class="w-5 h-5" />
+    <!-- Mobile Drawer Menu -->
+    <div v-if="mobileMenuOpen" class="lg:hidden fixed inset-0 z-30 bg-slate-950/90 backdrop-blur-lg pt-16 px-4 pb-6 space-y-2 overflow-y-auto">
+      <button @click="activeTab = 'dashboard'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Tổng Quan</button>
+      <button @click="activeTab = 'products'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Sản Phẩm</button>
+      <button @click="activeTab = 'categories'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Danh Mục</button>
+      <button @click="activeTab = 'suppliers'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Nhà Cung Cấp</button>
+      <button @click="activeTab = 'movements'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Nhập / Xuất Kho</button>
+      <button @click="activeTab = 'logs'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Nhật Ký Tồn Kho</button>
+      <button v-if="authStore.user?.role === 'ADMIN'" @click="activeTab = 'users'; mobileMenuOpen = false" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800">Thành Viên</button>
+      <button @click="handleLogout" class="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10">Đăng Xuất</button>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- MAIN CONTENT VIEWPORT (lg:pl-64 for Desktop Sidebar alignment) -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <div class="flex-1 lg:pl-64 flex flex-col min-h-screen pt-14 lg:pt-0">
+      <!-- Top Title Header Bar -->
+      <header class="glass-panel sticky top-0 z-20 border-b border-slate-800/80 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-base lg:text-lg font-bold text-slate-100">{{ tabTitles[activeTab] }}</h2>
+          <p class="text-xs text-slate-400">Hệ thống Quản lý Kho Hàng Doanh Nghiệp Pro</p>
+        </div>
+
+        <div class="hidden sm:flex items-center space-x-3 text-xs text-slate-400">
+          <span>Thời gian: <strong class="text-slate-200">{{ new Date().toLocaleDateString('vi-VN') }}</strong></span>
+        </div>
+      </header>
+
+      <!-- Main Dynamic Content -->
+      <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+        <!-- 1. DASHBOARD TAB -->
+        <div v-if="activeTab === 'dashboard'" class="space-y-6">
+          <!-- Stats Row -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-indigo-500/40 transition-all">
+              <div class="flex justify-between items-start mb-3">
+                <span class="text-xs font-medium text-slate-400">Tổng Số Mặt Hàng</span>
+                <div class="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  <Boxes class="w-5 h-5" />
+                </div>
               </div>
+              <span class="text-2xl font-bold tracking-tight text-white">{{ stats.totalProducts }} sp</span>
             </div>
-            <span class="text-2xl font-bold tracking-tight text-white">{{ stats.totalProducts }} sp</span>
+
+            <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-emerald-500/40 transition-all">
+              <div class="flex justify-between items-start mb-3">
+                <span class="text-xs font-medium text-slate-400">Tổng Lượng Tồn Kho</span>
+                <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <ArrowDownLeft class="w-5 h-5" />
+                </div>
+              </div>
+              <span class="text-2xl font-bold tracking-tight text-emerald-400">{{ stats.totalStockQuantity }} đơn vị</span>
+            </div>
+
+            <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-blue-500/40 transition-all">
+              <div class="flex justify-between items-start mb-3">
+                <span class="text-xs font-medium text-slate-400">Giá Trị Quy Đổi Kho</span>
+                <div class="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <TrendingUp class="w-5 h-5" />
+                </div>
+              </div>
+              <span class="text-xl font-bold tracking-tight text-blue-300">{{ formatCurrency(stats.totalStockValue) }}</span>
+            </div>
+
+            <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-amber-500/40 transition-all">
+              <div class="flex justify-between items-start mb-3">
+                <span class="text-xs font-medium text-slate-400">Phiếu Chờ Duyệt</span>
+                <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <Clock class="w-5 h-5" />
+                </div>
+              </div>
+              <span class="text-2xl font-bold tracking-tight text-amber-300">{{ stats.pendingMovementsCount }} phiếu</span>
+            </div>
           </div>
 
-          <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-emerald-500/40 transition-all">
-            <div class="flex justify-between items-start mb-3">
-              <span class="text-xs font-medium text-slate-400">Tổng Lượng Tồn Kho</span>
-              <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <ArrowDownLeft class="w-5 h-5" />
+          <!-- Recent Movements Table -->
+          <div class="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-base font-bold text-slate-100">Phiếu Nhập / Xuất Kho Gần Đây</h2>
+                <p class="text-xs text-slate-400">Theo dõi tiến độ duyệt và trạng thái vận hành kho</p>
               </div>
+              <button @click="activeTab = 'movements'" class="text-xs text-indigo-400 font-semibold hover:underline">
+                Xem Tất Cả &rarr;
+              </button>
             </div>
-            <span class="text-2xl font-bold tracking-tight text-emerald-400">{{ stats.totalStockQuantity }} đơn vị</span>
-          </div>
 
-          <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-blue-500/40 transition-all">
-            <div class="flex justify-between items-start mb-3">
-              <span class="text-xs font-medium text-slate-400">Giá Trị Quy Đổi Kho</span>
-              <div class="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                <TrendingUp class="w-5 h-5" />
-              </div>
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th class="px-4 py-3">Mã Phiếu</th>
+                    <th class="px-4 py-3">Loại</th>
+                    <th class="px-4 py-3">Tổng Tiền</th>
+                    <th class="px-4 py-3">Trạng Thái</th>
+                    <th class="px-4 py-3 text-right">Ngày Tạo</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                  <tr v-for="m in movements.slice(0, 5)" :key="m.id" class="hover:bg-slate-900/40">
+                    <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ m.code }}</td>
+                    <td class="px-4 py-3">
+                      <span :class="['px-2 py-0.5 rounded-full text-[10px] font-semibold border', m.type === 'IMPORT' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20']">
+                        {{ m.type === 'IMPORT' ? 'Nhập Kho' : 'Xuất Kho' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 font-medium text-slate-200">{{ formatCurrency(m.totalAmount) }}</td>
+                    <td class="px-4 py-3">
+                      <span :class="['text-[11px] font-medium', m.status === 'COMPLETED' ? 'text-emerald-400' : m.status === 'CANCELLED' ? 'text-rose-400' : 'text-amber-400']">
+                        {{ m.status === 'COMPLETED' ? '✓ Hoàn tất' : m.status === 'CANCELLED' ? '✕ Hủy bỏ' : '⏳ Chờ duyệt' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-slate-400">{{ new Date(m.createdAt).toLocaleDateString('vi-VN') }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <span class="text-xl font-bold tracking-tight text-blue-300">{{ formatCurrency(stats.totalStockValue) }}</span>
-          </div>
-
-          <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-amber-500/40 transition-all">
-            <div class="flex justify-between items-start mb-3">
-              <span class="text-xs font-medium text-slate-400">Phiếu Chờ Duyệt</span>
-              <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <Clock class="w-5 h-5" />
-              </div>
-            </div>
-            <span class="text-2xl font-bold tracking-tight text-amber-300">{{ stats.pendingMovementsCount }} phiếu</span>
           </div>
         </div>
 
-        <!-- Recent Movements Table -->
-        <div class="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-base font-bold text-slate-100">Phiếu Nhập / Xuất Kho Gần Đây</h2>
-              <p class="text-xs text-slate-400">Theo dõi tiến độ duyệt và trạng thái vận hành kho</p>
+        <!-- 2. PRODUCTS TAB -->
+        <div v-else-if="activeTab === 'products'" class="space-y-4">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-4 rounded-2xl border border-slate-800">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+              <div class="relative w-full sm:w-64">
+                <Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                <input 
+                  v-model="searchQuery" 
+                  type="text" 
+                  placeholder="Tìm theo tên hoặc SKU..." 
+                  class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <select v-model="selectedCategoryId" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer">
+                <option value="">Tất cả danh mục</option>
+                <option v-for="c in categoriesList" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
             </div>
-            <button @click="activeTab = 'movements'" class="text-xs text-indigo-400 font-semibold hover:underline">
-              Xem Tất Cả &rarr;
+
+            <div class="flex items-center space-x-2">
+              <button 
+                v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER'"
+                @click="showCategoryModal = true" 
+                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer border border-slate-700"
+              >
+                <Tag class="w-4 h-4 text-indigo-400" />
+                <span>Tạo Danh Mục</span>
+              </button>
+
+              <button 
+                v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER'"
+                @click="showProductModal = true" 
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-md shadow-indigo-900/30 cursor-pointer"
+              >
+                <Plus class="w-4 h-4" />
+                <span>Thêm Sản Phẩm Mới</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-4 py-3">Mã SKU</th>
+                  <th class="px-4 py-3">Tên Sản Phẩm</th>
+                  <th class="px-4 py-3">Danh Mục</th>
+                  <th class="px-4 py-3">Số Lượng Tồn</th>
+                  <th class="px-4 py-3">Tồn Tối Thiểu</th>
+                  <th class="px-4 py-3">Đơn Giá</th>
+                  <th class="px-4 py-3 text-right">Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr v-for="p in filteredProducts" :key="p.id" class="hover:bg-slate-900/40">
+                  <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ p.sku }}</td>
+                  <td class="px-4 py-3 font-medium text-slate-100">{{ p.name }}</td>
+                  <td class="px-4 py-3">
+                    <span class="px-2 py-0.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-lg text-[11px]">
+                      {{ p.categoryObj?.name || p.category || 'Chưa phân loại' }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 font-bold text-slate-200">{{ p.quantity }} {{ p.unit }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ p.minQuantity }} {{ p.unit }}</td>
+                  <td class="px-4 py-3 font-semibold text-emerald-400">{{ formatCurrency(p.price) }}</td>
+                  <td class="px-4 py-3 text-right">
+                    <span :class="['px-2 py-0.5 rounded-full text-[10px] font-semibold border', p.isLowStock ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20']">
+                      {{ p.isLowStock ? '⚠️ Tồn kho thấp' : '✓ An toàn' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2.5. CATEGORIES TAB -->
+        <div v-else-if="activeTab === 'categories'" class="space-y-4">
+          <div class="flex items-center justify-between glass-panel p-4 rounded-2xl border border-slate-800">
+            <h2 class="text-sm font-bold text-slate-200">Quản Lý Danh Mục Sản Phẩm</h2>
+            <button 
+              v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER'"
+              @click="showCategoryModal = true" 
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
+            >
+              <Plus class="w-4 h-4" />
+              <span>Thêm Danh Mục</span>
             </button>
           </div>
 
-          <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-4 py-3">Mã Danh Mục</th>
+                  <th class="px-4 py-3">Tên Danh Mục</th>
+                  <th class="px-4 py-3">Mô Tả</th>
+                  <th class="px-4 py-3 text-right">Số Sản Phẩm</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr v-for="c in categoriesList" :key="c.id" class="hover:bg-slate-900/40">
+                  <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ c.code }}</td>
+                  <td class="px-4 py-3 font-medium text-slate-100">{{ c.name }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ c.description || '-' }}</td>
+                  <td class="px-4 py-3 text-right font-bold text-indigo-400">{{ c._count?.products || 0 }} sp</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. SUPPLIERS TAB -->
+        <div v-else-if="activeTab === 'suppliers'" class="space-y-4">
+          <div class="flex items-center justify-between glass-panel p-4 rounded-2xl border border-slate-800">
+            <h2 class="text-sm font-bold text-slate-200">Danh Sách Nhà Cung Cấp Kho</h2>
+            <button 
+              v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER'"
+              @click="showSupplierModal = true" 
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
+            >
+              <Plus class="w-4 h-4" />
+              <span>Thêm Nhà Cung Cấp</span>
+            </button>
+          </div>
+
+          <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-4 py-3">Mã NCC</th>
+                  <th class="px-4 py-3">Tên Nhà Cung Cấp</th>
+                  <th class="px-4 py-3">Email Liên Hệ</th>
+                  <th class="px-4 py-3">Số Điện Thoại</th>
+                  <th class="px-4 py-3">Địa Chỉ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr v-for="s in suppliers" :key="s.id" class="hover:bg-slate-900/40">
+                  <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ s.code }}</td>
+                  <td class="px-4 py-3 font-medium text-slate-100">{{ s.name }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ s.email || '-' }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ s.phone || '-' }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ s.address || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 4. MOVEMENTS TAB -->
+        <div v-else-if="activeTab === 'movements'" class="space-y-4">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-4 rounded-2xl border border-slate-800">
+            <div class="flex items-center space-x-2">
+              <select v-model="selectedMovementType" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                <option value="">Tất cả loại phiếu</option>
+                <option value="IMPORT">Phiếu Nhập Kho</option>
+                <option value="EXPORT">Phiếu Xuất Kho</option>
+              </select>
+            </div>
+
+            <button 
+              @click="showMovementModal = true" 
+              class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-md shadow-emerald-900/30"
+            >
+              <Plus class="w-4 h-4" />
+              <span>Lập Phiếu Đề Xuất Nhập / Xuất</span>
+            </button>
+          </div>
+
+          <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
             <table class="w-full text-left text-xs text-slate-300">
               <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
                 <tr>
                   <th class="px-4 py-3">Mã Phiếu</th>
-                  <th class="px-4 py-3">Loại</th>
+                  <th class="px-4 py-3">Loại Giao Dịch</th>
+                  <th class="px-4 py-3">Nhà Cung Cấp</th>
+                  <th class="px-4 py-3">Người Tạo</th>
                   <th class="px-4 py-3">Tổng Tiền</th>
                   <th class="px-4 py-3">Trạng Thái</th>
-                  <th class="px-4 py-3 text-right">Ngày Tạo</th>
+                  <th class="px-4 py-3 text-right">Thao Tác Duyệt</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
-                <tr v-for="m in movements.slice(0, 5)" :key="m.id" class="hover:bg-slate-900/40">
+                <tr v-for="m in filteredMovements" :key="m.id" class="hover:bg-slate-900/40">
                   <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ m.code }}</td>
                   <td class="px-4 py-3">
                     <span :class="['px-2 py-0.5 rounded-full text-[10px] font-semibold border', m.type === 'IMPORT' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20']">
                       {{ m.type === 'IMPORT' ? 'Nhập Kho' : 'Xuất Kho' }}
                     </span>
                   </td>
-                  <td class="px-4 py-3 font-medium text-slate-200">{{ formatCurrency(m.totalAmount) }}</td>
+                  <td class="px-4 py-3 text-slate-300">{{ m.supplier?.name || 'N/A' }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ m.createdBy?.fullName }}</td>
+                  <td class="px-4 py-3 font-semibold text-slate-100">{{ formatCurrency(m.totalAmount) }}</td>
                   <td class="px-4 py-3">
-                    <span :class="['text-[11px] font-medium', m.status === 'COMPLETED' ? 'text-emerald-400' : m.status === 'CANCELLED' ? 'text-rose-400' : 'text-amber-400']">
-                      {{ m.status === 'COMPLETED' ? '✓ Hoàn tất' : m.status === 'CANCELLED' ? '✕ Hủy bỏ' : '⏳ Chờ duyệt' }}
+                    <span :class="['text-[11px] font-semibold', m.status === 'COMPLETED' ? 'text-emerald-400' : m.status === 'CANCELLED' ? 'text-rose-400' : 'text-amber-400']">
+                      {{ m.status === 'COMPLETED' ? '✓ Hoàn tất' : m.status === 'CANCELLED' ? '✕ Hủy' : '⏳ Chờ duyệt' }}
                     </span>
                   </td>
-                  <td class="px-4 py-3 text-right font-mono text-slate-400">{{ new Date(m.createdAt).toLocaleDateString('vi-VN') }}</td>
+                  <td class="px-4 py-3 text-right space-x-1.5">
+                    <template v-if="m.status === 'PENDING' && (authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER')">
+                      <button @click="handleUpdateMovementStatus(m.id, 'COMPLETED')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded-lg transition-all cursor-pointer">
+                        Duyệt COMPLETED
+                      </button>
+                      <button @click="handleUpdateMovementStatus(m.id, 'CANCELLED')" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-semibold rounded-lg transition-all cursor-pointer">
+                        Hủy
+                      </button>
+                    </template>
+                    <span v-else class="text-[10px] text-slate-500 italic">Đã khóa</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
-      </div>
 
-      <!-- 2. PRODUCTS TAB -->
-      <div v-else-if="activeTab === 'products'" class="space-y-4">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-4 rounded-2xl border border-slate-800">
-          <div class="flex items-center space-x-3 w-full sm:w-auto">
-            <div class="relative w-full sm:w-64">
-              <Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-              <input 
-                v-model="searchQuery" 
-                type="text" 
-                placeholder="Tìm theo tên hoặc SKU..." 
-                class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+        <!-- 5. AUDIT LOGS TAB -->
+        <div v-else-if="activeTab === 'logs'" class="space-y-4">
+          <div class="glass-panel p-4 rounded-2xl border border-slate-800">
+            <h2 class="text-sm font-bold text-slate-200">Lịch Sử Biến Động Tồn Kho Real-time</h2>
+            <p class="text-xs text-slate-400">Nhật ký theo dõi sự thay đổi số lượng kho qua từng giao dịch</p>
           </div>
 
-          <button 
-            v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER'"
-            @click="showProductModal = true" 
-            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-md shadow-indigo-900/30 cursor-pointer"
-          >
-            <Plus class="w-4 h-4" />
-            <span>Thêm Sản Phẩm Mới</span>
-          </button>
+          <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-4 py-3">Mã Tham Chiếu</th>
+                  <th class="px-4 py-3">Sản Phẩm</th>
+                  <th class="px-4 py-3">Mã SKU</th>
+                  <th class="px-4 py-3">Số Lượng Biến Động</th>
+                  <th class="px-4 py-3">Tồn Kho Trước &rarr; Sau</th>
+                  <th class="px-4 py-3 text-right">Thời Gian</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr v-for="l in logs" :key="l.id" class="hover:bg-slate-900/40">
+                  <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ l.refCode }}</td>
+                  <td class="px-4 py-3 font-medium text-slate-200">{{ l.product?.name }}</td>
+                  <td class="px-4 py-3 text-slate-400 font-mono">{{ l.product?.sku }}</td>
+                  <td class="px-4 py-3 font-bold" :class="l.quantityChange > 0 ? 'text-emerald-400' : 'text-rose-400'">
+                    {{ l.quantityChange > 0 ? `+${l.quantityChange}` : l.quantityChange }}
+                  </td>
+                  <td class="px-4 py-3 font-mono text-slate-300">{{ l.previousQuantity }} &rarr; <span class="font-bold text-white">{{ l.newQuantity }}</span></td>
+                  <td class="px-4 py-3 text-right font-mono text-slate-400 text-[11px]">{{ new Date(l.createdAt).toLocaleString('vi-VN') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Products Table -->
-        <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
-              <tr>
-                <th class="px-4 py-3">Mã SKU</th>
-                <th class="px-4 py-3">Tên Sản Phẩm</th>
-                <th class="px-4 py-3">Danh Mục</th>
-                <th class="px-4 py-3">Số Lượng Tồn</th>
-                <th class="px-4 py-3">Tồn Tối Thiểu</th>
-                <th class="px-4 py-3">Đơn Giá</th>
-                <th class="px-4 py-3 text-right">Trạng Thái</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
-              <tr v-for="p in filteredProducts" :key="p.id" class="hover:bg-slate-900/40">
-                <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ p.sku }}</td>
-                <td class="px-4 py-3 font-medium text-slate-100">{{ p.name }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ p.category }}</td>
-                <td class="px-4 py-3 font-bold text-slate-200">{{ p.quantity }} {{ p.unit }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ p.minQuantity }} {{ p.unit }}</td>
-                <td class="px-4 py-3 font-semibold text-emerald-400">{{ formatCurrency(p.price) }}</td>
-                <td class="px-4 py-3 text-right">
-                  <span :class="['px-2 py-0.5 rounded-full text-[10px] font-semibold border', p.isLowStock ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20']">
-                    {{ p.isLowStock ? '⚠️ Tồn kho thấp' : '✓ An toàn' }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 3. SUPPLIERS TAB -->
-      <div v-else-if="activeTab === 'suppliers'" class="space-y-4">
-        <div class="flex items-center justify-between glass-panel p-4 rounded-2xl border border-slate-800">
-          <h2 class="text-sm font-bold text-slate-200">Danh Sách Nhà Cung Cấp Kho</h2>
-          <button 
-            v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER'"
-            @click="showSupplierModal = true" 
-            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
-          >
-            <Plus class="w-4 h-4" />
-            <span>Thêm Nhà Cung Cấp</span>
-          </button>
-        </div>
-
-        <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
-              <tr>
-                <th class="px-4 py-3">Mã NCC</th>
-                <th class="px-4 py-3">Tên Nhà Cung Cấp</th>
-                <th class="px-4 py-3">Email Liên Hệ</th>
-                <th class="px-4 py-3">Số Điện Thoại</th>
-                <th class="px-4 py-3">Địa Chỉ</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
-              <tr v-for="s in suppliers" :key="s.id" class="hover:bg-slate-900/40">
-                <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ s.code }}</td>
-                <td class="px-4 py-3 font-medium text-slate-100">{{ s.name }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ s.email || '-' }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ s.phone || '-' }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ s.address || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 4. MOVEMENTS TAB -->
-      <div v-else-if="activeTab === 'movements'" class="space-y-4">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-4 rounded-2xl border border-slate-800">
-          <div class="flex items-center space-x-2">
-            <select v-model="selectedMovementType" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
-              <option value="">Tất cả loại phiếu</option>
-              <option value="IMPORT">Phiếu Nhập Kho</option>
-              <option value="EXPORT">Phiếu Xuất Kho</option>
-            </select>
+        <!-- 6. USERS TAB -->
+        <div v-else-if="activeTab === 'users' && authStore.user?.role === 'ADMIN'" class="space-y-4">
+          <div class="glass-panel p-4 rounded-2xl border border-slate-800">
+            <h2 class="text-sm font-bold text-slate-200">Quản Lý Thành Viên Kho (Chỉ dành cho Admin)</h2>
           </div>
 
-          <button 
-            @click="showMovementModal = true" 
-            class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-md shadow-emerald-900/30"
-          >
-            <Plus class="w-4 h-4" />
-            <span>Lập Phiếu Đề Xuất Nhập / Xuất</span>
-          </button>
+          <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-4 py-3">Họ và Tên</th>
+                  <th class="px-4 py-3">Email</th>
+                  <th class="px-4 py-3">Vai Trò Hiện Tại</th>
+                  <th class="px-4 py-3 text-right">Đổi Vai Trò</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr v-for="u in usersList" :key="u.id" class="hover:bg-slate-900/40">
+                  <td class="px-4 py-3 font-medium text-slate-100">{{ u.fullName }}</td>
+                  <td class="px-4 py-3 text-slate-400">{{ u.email }}</td>
+                  <td class="px-4 py-3">
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {{ u.role }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <select 
+                      :value="u.role"
+                      @change="e => handleUpdateUserRole(u.id, (e.target as HTMLSelectElement).value)"
+                      class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ADMIN">ADMIN</option>
+                      <option value="WAREHOUSE_MANAGER">WAREHOUSE_MANAGER</option>
+                      <option value="STAFF">STAFF</option>
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-
-        <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
-              <tr>
-                <th class="px-4 py-3">Mã Phiếu</th>
-                <th class="px-4 py-3">Loại Giao Dịch</th>
-                <th class="px-4 py-3">Nhà Cung Cấp</th>
-                <th class="px-4 py-3">Người Tạo</th>
-                <th class="px-4 py-3">Tổng Tiền</th>
-                <th class="px-4 py-3">Trạng Thái</th>
-                <th class="px-4 py-3 text-right">Thao Tác Duyệt</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
-              <tr v-for="m in filteredMovements" :key="m.id" class="hover:bg-slate-900/40">
-                <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ m.code }}</td>
-                <td class="px-4 py-3">
-                  <span :class="['px-2 py-0.5 rounded-full text-[10px] font-semibold border', m.type === 'IMPORT' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20']">
-                    {{ m.type === 'IMPORT' ? 'Nhập Kho' : 'Xuất Kho' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-slate-300">{{ m.supplier?.name || 'N/A' }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ m.createdBy?.fullName }}</td>
-                <td class="px-4 py-3 font-semibold text-slate-100">{{ formatCurrency(m.totalAmount) }}</td>
-                <td class="px-4 py-3">
-                  <span :class="['text-[11px] font-semibold', m.status === 'COMPLETED' ? 'text-emerald-400' : m.status === 'CANCELLED' ? 'text-rose-400' : 'text-amber-400']">
-                    {{ m.status === 'COMPLETED' ? '✓ Hoàn tất' : m.status === 'CANCELLED' ? '✕ Hủy' : '⏳ Chờ duyệt' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-right space-x-1.5">
-                  <template v-if="m.status === 'PENDING' && (authStore.user?.role === 'ADMIN' || authStore.user?.role === 'WAREHOUSE_MANAGER')">
-                    <button @click="handleUpdateMovementStatus(m.id, 'COMPLETED')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded-lg transition-all cursor-pointer">
-                      Duyệt COMPLETED
-                    </button>
-                    <button @click="handleUpdateMovementStatus(m.id, 'CANCELLED')" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-semibold rounded-lg transition-all cursor-pointer">
-                      Hủy
-                    </button>
-                  </template>
-                  <span v-else class="text-[10px] text-slate-500 italic">Đã khóa</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 5. AUDIT LOGS TAB -->
-      <div v-else-if="activeTab === 'logs'" class="space-y-4">
-        <div class="glass-panel p-4 rounded-2xl border border-slate-800">
-          <h2 class="text-sm font-bold text-slate-200">Lịch Sử Biến Động Tồn Kho Real-time</h2>
-          <p class="text-xs text-slate-400">Nhật ký theo dõi sự thay đổi số lượng kho qua từng giao dịch</p>
-        </div>
-
-        <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
-              <tr>
-                <th class="px-4 py-3">Mã Tham Chiếu</th>
-                <th class="px-4 py-3">Sản Phẩm</th>
-                <th class="px-4 py-3">Mã SKU</th>
-                <th class="px-4 py-3">Số Lượng Biến Động</th>
-                <th class="px-4 py-3">Tồn Kho Trước &rarr; Sau</th>
-                <th class="px-4 py-3 text-right">Thời Gian</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
-              <tr v-for="l in logs" :key="l.id" class="hover:bg-slate-900/40">
-                <td class="px-4 py-3 font-mono font-semibold text-indigo-300">{{ l.refCode }}</td>
-                <td class="px-4 py-3 font-medium text-slate-200">{{ l.product?.name }}</td>
-                <td class="px-4 py-3 text-slate-400 font-mono">{{ l.product?.sku }}</td>
-                <td class="px-4 py-3 font-bold" :class="l.quantityChange > 0 ? 'text-emerald-400' : 'text-rose-400'">
-                  {{ l.quantityChange > 0 ? `+${l.quantityChange}` : l.quantityChange }}
-                </td>
-                <td class="px-4 py-3 font-mono text-slate-300">{{ l.previousQuantity }} &rarr; <span class="font-bold text-white">{{ l.newQuantity }}</span></td>
-                <td class="px-4 py-3 text-right font-mono text-slate-400 text-[11px]">{{ new Date(l.createdAt).toLocaleString('vi-VN') }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 6. USERS TAB -->
-      <div v-else-if="activeTab === 'users' && authStore.user?.role === 'ADMIN'" class="space-y-4">
-        <div class="glass-panel p-4 rounded-2xl border border-slate-800">
-          <h2 class="text-sm font-bold text-slate-200">Quản Lý Thành Viên Kho (Chỉ dành cho Admin)</h2>
-        </div>
-
-        <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900/80 text-[11px] uppercase text-slate-400 border-b border-slate-800">
-              <tr>
-                <th class="px-4 py-3">Họ và Tên</th>
-                <th class="px-4 py-3">Email</th>
-                <th class="px-4 py-3">Vai Trò Hiện Tại</th>
-                <th class="px-4 py-3 text-right">Đổi Vai Trò</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
-              <tr v-for="u in usersList" :key="u.id" class="hover:bg-slate-900/40">
-                <td class="px-4 py-3 font-medium text-slate-100">{{ u.fullName }}</td>
-                <td class="px-4 py-3 text-slate-400">{{ u.email }}</td>
-                <td class="px-4 py-3">
-                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {{ u.role }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <select 
-                    :value="u.role"
-                    @change="e => handleUpdateUserRole(u.id, (e.target as HTMLSelectElement).value)"
-                    class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none"
-                  >
-                    <option value="ADMIN">ADMIN</option>
-                    <option value="WAREHOUSE_MANAGER">WAREHOUSE_MANAGER</option>
-                    <option value="STAFF">STAFF</option>
-                  </select>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
+      </main>
+    </div>
 
     <!-- MODAL 1: THÊM SẢN PHẨM -->
     <div v-if="showProductModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -732,8 +891,11 @@ const formatCurrency = (val: number) => {
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-slate-300 mb-1">Danh Mục</label>
-              <input v-model="productForm.category" required type="text" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none" />
+              <label class="block text-slate-300 mb-1">Chọn Danh Mục</label>
+              <select v-model="productForm.categoryId" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none cursor-pointer">
+                <option value="">Không chọn</option>
+                <option v-for="c in categoriesList" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
             </div>
             <div>
               <label class="block text-slate-300 mb-1">Đơn Vị Tính</label>
@@ -751,8 +913,33 @@ const formatCurrency = (val: number) => {
             </div>
           </div>
           <div class="flex justify-end space-x-2 pt-3">
-            <button type="button" @click="showProductModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Hủy</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl">Lưu Sản Phẩm</button>
+            <button type="button" @click="showProductModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl cursor-pointer">Hủy</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl cursor-pointer">Lưu Sản Phẩm</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 1.5: THÊM DANH MỤC -->
+    <div v-if="showCategoryModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass-panel w-full max-w-md p-6 rounded-3xl border border-slate-800 space-y-4">
+        <h3 class="text-base font-bold text-slate-100">Thêm Danh Mục Sản Phẩm Mới</h3>
+        <form @submit.prevent="handleCreateCategory" class="space-y-3 text-xs">
+          <div>
+            <label class="block text-slate-300 mb-1">Mã Danh Mục (UPPERCASE, dụ: CAT-DIENTU)</label>
+            <input v-model="categoryForm.code" required type="text" placeholder="CAT-MAYTINH" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Tên Danh Mục</label>
+            <input v-model="categoryForm.name" required type="text" placeholder="Máy Tính & Laptop" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Mô Tả Danh Mục</label>
+            <input v-model="categoryForm.description" type="text" placeholder="Mô tả ngắn..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none" />
+          </div>
+          <div class="flex justify-end space-x-2 pt-3">
+            <button type="button" @click="showCategoryModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl cursor-pointer">Hủy</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl cursor-pointer">Lưu Danh Mục</button>
           </div>
         </form>
       </div>
@@ -780,8 +967,8 @@ const formatCurrency = (val: number) => {
             <input v-model="supplierForm.phone" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none" />
           </div>
           <div class="flex justify-end space-x-2 pt-3">
-            <button type="button" @click="showSupplierModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Hủy</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl">Lưu Nhà Cung Cấp</button>
+            <button type="button" @click="showSupplierModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl cursor-pointer">Hủy</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl cursor-pointer">Lưu Nhà Cung Cấp</button>
           </div>
         </form>
       </div>
@@ -836,8 +1023,8 @@ const formatCurrency = (val: number) => {
           </div>
 
           <div class="flex justify-end space-x-2 pt-3">
-            <button type="button" @click="showMovementModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Hủy</button>
-            <button type="submit" class="px-4 py-2 bg-emerald-600 text-white font-semibold rounded-xl">Tạo Phiếu Đề Xuất</button>
+            <button type="button" @click="showMovementModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl cursor-pointer">Hủy</button>
+            <button type="submit" class="px-4 py-2 bg-emerald-600 text-white font-semibold rounded-xl cursor-pointer">Tạo Phiếu Đề Xuất</button>
           </div>
         </form>
       </div>

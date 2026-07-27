@@ -30,11 +30,21 @@ let ProductsService = class ProductsService {
         if (existing) {
             throw new common_1.ConflictException(`Mã SKU '${sku}' đã tồn tại trong kho hàng của bạn`);
         }
+        let categoryName = dto.category ? dto.category.trim() : 'Chưa phân loại';
+        if (dto.categoryId) {
+            const catObj = await this.prisma.category.findFirst({
+                where: { id: dto.categoryId, tenantId },
+            });
+            if (catObj) {
+                categoryName = catObj.name;
+            }
+        }
         const product = await this.prisma.product.create({
             data: {
                 sku,
                 name: dto.name.trim(),
-                category: dto.category.trim(),
+                category: categoryName,
+                categoryId: dto.categoryId || undefined,
                 unit: dto.unit.trim(),
                 minQuantity: dto.minQuantity ?? 5,
                 price: dto.price,
@@ -42,13 +52,16 @@ let ProductsService = class ProductsService {
                 quantity: 0,
                 tenantId,
             },
+            include: {
+                categoryObj: true,
+            },
         });
         return {
             ...product,
             isLowStock: product.quantity <= product.minQuantity,
         };
     }
-    async findAll(tenantId, search, category) {
+    async findAll(tenantId, search, category, categoryId) {
         const where = { tenantId };
         if (search) {
             where.OR = [
@@ -56,11 +69,17 @@ let ProductsService = class ProductsService {
                 { sku: { contains: search, mode: 'insensitive' } },
             ];
         }
-        if (category) {
+        if (categoryId) {
+            where.categoryId = categoryId;
+        }
+        else if (category) {
             where.category = { equals: category, mode: 'insensitive' };
         }
         const products = await this.prisma.product.findMany({
             where,
+            include: {
+                categoryObj: true,
+            },
             orderBy: { createdAt: 'desc' },
         });
         return products.map((p) => ({
@@ -71,6 +90,9 @@ let ProductsService = class ProductsService {
     async findLowStock(tenantId) {
         const products = await this.prisma.product.findMany({
             where: { tenantId },
+            include: {
+                categoryObj: true,
+            },
             orderBy: { quantity: 'asc' },
         });
         return products
@@ -83,6 +105,9 @@ let ProductsService = class ProductsService {
     async findOne(tenantId, id) {
         const product = await this.prisma.product.findFirst({
             where: { id, tenantId },
+            include: {
+                categoryObj: true,
+            },
         });
         if (!product) {
             throw new common_1.NotFoundException('Không tìm thấy sản phẩm');
@@ -108,16 +133,32 @@ let ProductsService = class ProductsService {
                 throw new common_1.ConflictException(`Mã SKU '${sku}' đã bị trùng lặp`);
             }
         }
+        let categoryName;
+        if (dto.categoryId) {
+            const catObj = await this.prisma.category.findFirst({
+                where: { id: dto.categoryId, tenantId },
+            });
+            if (catObj) {
+                categoryName = catObj.name;
+            }
+        }
+        else if (dto.category) {
+            categoryName = dto.category.trim();
+        }
         const product = await this.prisma.product.update({
             where: { id },
             data: {
                 ...(sku && { sku }),
                 ...(dto.name && { name: dto.name.trim() }),
-                ...(dto.category && { category: dto.category.trim() }),
+                ...(categoryName && { category: categoryName }),
+                ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
                 ...(dto.unit && { unit: dto.unit.trim() }),
                 ...(dto.minQuantity !== undefined && { minQuantity: dto.minQuantity }),
                 ...(dto.price !== undefined && { price: dto.price }),
                 ...(dto.description !== undefined && { description: dto.description ? dto.description.trim() : null }),
+            },
+            include: {
+                categoryObj: true,
             },
         });
         return {

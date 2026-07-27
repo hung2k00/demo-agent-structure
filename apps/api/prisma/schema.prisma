@@ -30,6 +30,7 @@ model Tenant {
   createdAt DateTime @default(now())
 
   users          User[]
+  categories     Category[]
   suppliers      Supplier[]
   products       Product[]
   movements      WarehouseMovement[]
@@ -47,6 +48,21 @@ model User {
 
   tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   movements    WarehouseMovement[] @relation("CreatedByUser")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  code        String
+  name        String
+  description String?
+  tenantId    String
+  createdAt   DateTime @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, name])
 }
 
 model Supplier {
@@ -70,6 +86,7 @@ model Product {
   sku         String
   name        String
   category    String
+  categoryId  String?
   unit        String
   quantity    Int      @default(0)
   minQuantity Int      @default(5)
@@ -79,6 +96,7 @@ model Product {
   createdAt   DateTime @default(now())
 
   tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryObj   Category?               @relation(fields: [categoryId], references: [id])
   movementItems WarehouseMovementItem[]
   movementLogs  StockMovementLog[]
 

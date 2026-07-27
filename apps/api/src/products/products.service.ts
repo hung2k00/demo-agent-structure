@@ -22,17 +22,31 @@ export class ProductsService {
       throw new ConflictException(`Mã SKU '${sku}' đã tồn tại trong kho hàng của bạn`);
     }
 
+    let categoryName = dto.category ? dto.category.trim() : 'Chưa phân loại';
+    if (dto.categoryId) {
+      const catObj = await this.prisma.category.findFirst({
+        where: { id: dto.categoryId, tenantId },
+      });
+      if (catObj) {
+        categoryName = catObj.name;
+      }
+    }
+
     const product = await this.prisma.product.create({
       data: {
         sku,
         name: dto.name.trim(),
-        category: dto.category.trim(),
+        category: categoryName,
+        categoryId: dto.categoryId || undefined,
         unit: dto.unit.trim(),
         minQuantity: dto.minQuantity ?? 5,
         price: dto.price,
         description: dto.description ? dto.description.trim() : undefined,
         quantity: 0,
         tenantId,
+      },
+      include: {
+        categoryObj: true,
       },
     });
 
@@ -42,7 +56,7 @@ export class ProductsService {
     };
   }
 
-  async findAll(tenantId: string, search?: string, category?: string) {
+  async findAll(tenantId: string, search?: string, category?: string, categoryId?: string) {
     const where: any = { tenantId };
 
     if (search) {
@@ -52,12 +66,17 @@ export class ProductsService {
       ];
     }
 
-    if (category) {
+    if (categoryId) {
+      where.categoryId = categoryId;
+    } else if (category) {
       where.category = { equals: category, mode: 'insensitive' };
     }
 
     const products = await this.prisma.product.findMany({
       where,
+      include: {
+        categoryObj: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -70,6 +89,9 @@ export class ProductsService {
   async findLowStock(tenantId: string) {
     const products = await this.prisma.product.findMany({
       where: { tenantId },
+      include: {
+        categoryObj: true,
+      },
       orderBy: { quantity: 'asc' },
     });
 
@@ -84,6 +106,9 @@ export class ProductsService {
   async findOne(tenantId: string, id: string) {
     const product = await this.prisma.product.findFirst({
       where: { id, tenantId },
+      include: {
+        categoryObj: true,
+      },
     });
 
     if (!product) {
@@ -115,16 +140,32 @@ export class ProductsService {
       }
     }
 
+    let categoryName: string | undefined;
+    if (dto.categoryId) {
+      const catObj = await this.prisma.category.findFirst({
+        where: { id: dto.categoryId, tenantId },
+      });
+      if (catObj) {
+        categoryName = catObj.name;
+      }
+    } else if (dto.category) {
+      categoryName = dto.category.trim();
+    }
+
     const product = await this.prisma.product.update({
       where: { id },
       data: {
         ...(sku && { sku }),
         ...(dto.name && { name: dto.name.trim() }),
-        ...(dto.category && { category: dto.category.trim() }),
+        ...(categoryName && { category: categoryName }),
+        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
         ...(dto.unit && { unit: dto.unit.trim() }),
         ...(dto.minQuantity !== undefined && { minQuantity: dto.minQuantity }),
         ...(dto.price !== undefined && { price: dto.price }),
         ...(dto.description !== undefined && { description: dto.description ? dto.description.trim() : null }),
+      },
+      include: {
+        categoryObj: true,
       },
     });
 

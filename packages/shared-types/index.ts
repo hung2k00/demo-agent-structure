@@ -48,6 +48,28 @@ export interface UpdateUserRoleDto {
   role: UserRole;
 }
 
+// Category
+export interface CategoryDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  tenantId: string;
+  createdAt: string;
+}
+
+export interface CreateCategoryDto {
+  code: string;
+  name: string;
+  description?: string;
+}
+
+export interface UpdateCategoryDto {
+  code?: string;
+  name?: string;
+  description?: string;
+}
+
 // Supplier
 export interface SupplierDto {
   id: string;
@@ -82,6 +104,8 @@ export interface ProductDto {
   sku: string;
   name: string;
   category: string;
+  categoryId?: string;
+  categoryObj?: CategoryDto;
   unit: string;
   quantity: number;
   minQuantity: number;
@@ -95,7 +119,8 @@ export interface ProductDto {
 export interface CreateProductDto {
   sku: string;
   name: string;
-  category: string;
+  category?: string;
+  categoryId?: string;
   unit: string;
   minQuantity?: number;
   price: number;
@@ -106,6 +131,7 @@ export interface UpdateProductDto {
   sku?: string;
   name?: string;
   category?: string;
+  categoryId?: string;
   unit?: string;
   minQuantity?: number;
   price?: number;

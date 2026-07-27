@@ -79,6 +79,26 @@ Quản lý danh sách các nhà cung cấp vật tư, linh kiện hoặc hàng h
 - `PUT /api/v1/suppliers/:id`: Cập nhật thông tin nhà cung cấp.
 - `DELETE /api/v1/suppliers/:id`: Xóa nhà cung cấp.
 
+## 4.5. Tính Năng Quản Lý Danh Mục Sản Phẩm (Category Management)
+
+### 🎯 Mục đích
+Cho phép khởi tạo và phân loại các danh mục sản phẩm (như Máy tính, Màn hình, Phụ kiện, v.v.), giúp hỗ trợ lọc danh sách sản phẩm và lựa chọn danh mục chuẩn khi tạo mới sản phẩm.
+
+### 📜 Quy tắc nghiệp vụ & Validation
+- **Mã Danh Mục (`code`)**: Viết hoa (UPPERCASE), chỉ gồm `A-Z, 0-9, -`. Duy nhất theo từng Tenant (`unique([tenantId, code])`).
+- **Tên Danh Mục (`name`)**: Bắt buộc nhập, duy nhất theo từng Tenant (`unique([tenantId, name])`).
+- **Phân quyền RBAC**:
+  - `ADMIN`, `WAREHOUSE_MANAGER`, `STAFF`: Xem danh sách danh mục (`GET /api/v1/categories`).
+  - `ADMIN`, `WAREHOUSE_MANAGER`: Tạo mới (`POST /api/v1/categories`) và Sửa danh mục (`PUT /api/v1/categories/:id`).
+  - `ADMIN`: Xóa danh mục (`DELETE /api/v1/categories/:id`).
+
+### 🔗 Danh sách API
+- `GET /api/v1/categories`: Danh sách danh mục sản phẩm.
+- `GET /api/v1/categories/:id`: Chi tiết danh mục.
+- `POST /api/v1/categories`: Thêm mới danh mục sản phẩm.
+- `PUT /api/v1/categories/:id`: Cập nhật thông tin danh mục.
+- `DELETE /api/v1/categories/:id`: Xóa danh mục.
+
 ---
 
 ## 5. Tính Năng Quản Lý Sản Phẩm & Tồn Kho (Product Management)

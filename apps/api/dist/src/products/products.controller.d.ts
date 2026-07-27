@@ -5,85 +5,131 @@ export declare class ProductsController {
     constructor(productsService: ProductsService);
     create(req: any, dto: CreateProductDto): Promise<{
         isLowStock: boolean;
+        categoryObj: {
+            tenantId: string;
+            id: string;
+            name: string;
+            createdAt: Date;
+            code: string;
+            description: string | null;
+        } | null;
+        category: string;
         tenantId: string;
         id: string;
         name: string;
         createdAt: Date;
+        description: string | null;
         sku: string;
-        category: string;
+        categoryId: string | null;
         unit: string;
         minQuantity: number;
         price: number;
-        description: string | null;
         quantity: number;
     }>;
-    findAll(req: any, search?: string, category?: string): Promise<{
+    findAll(req: any, search?: string, category?: string, categoryId?: string): Promise<{
         isLowStock: boolean;
+        categoryObj: {
+            tenantId: string;
+            id: string;
+            name: string;
+            createdAt: Date;
+            code: string;
+            description: string | null;
+        } | null;
+        category: string;
         tenantId: string;
         id: string;
         name: string;
         createdAt: Date;
+        description: string | null;
         sku: string;
-        category: string;
+        categoryId: string | null;
         unit: string;
         minQuantity: number;
         price: number;
-        description: string | null;
         quantity: number;
     }[]>;
     findLowStock(req: any): Promise<{
         isLowStock: boolean;
+        categoryObj: {
+            tenantId: string;
+            id: string;
+            name: string;
+            createdAt: Date;
+            code: string;
+            description: string | null;
+        } | null;
+        category: string;
         tenantId: string;
         id: string;
         name: string;
         createdAt: Date;
+        description: string | null;
         sku: string;
-        category: string;
+        categoryId: string | null;
         unit: string;
         minQuantity: number;
         price: number;
-        description: string | null;
         quantity: number;
     }[]>;
     findOne(req: any, id: string): Promise<{
         isLowStock: boolean;
+        categoryObj: {
+            tenantId: string;
+            id: string;
+            name: string;
+            createdAt: Date;
+            code: string;
+            description: string | null;
+        } | null;
+        category: string;
         tenantId: string;
         id: string;
         name: string;
         createdAt: Date;
+        description: string | null;
         sku: string;
-        category: string;
+        categoryId: string | null;
         unit: string;
         minQuantity: number;
         price: number;
-        description: string | null;
         quantity: number;
     }>;
     update(req: any, id: string, dto: UpdateProductDto): Promise<{
         isLowStock: boolean;
+        categoryObj: {
+            tenantId: string;
+            id: string;
+            name: string;
+            createdAt: Date;
+            code: string;
+            description: string | null;
+        } | null;
+        category: string;
         tenantId: string;
         id: string;
         name: string;
         createdAt: Date;
+        description: string | null;
         sku: string;
-        category: string;
+        categoryId: string | null;
         unit: string;
         minQuantity: number;
         price: number;
-        description: string | null;
         quantity: number;
     }>;
     remove(req: any, id: string): Promise<{
+        category: string;
         tenantId: string;
         id: string;
         name: string;
         createdAt: Date;
+        description: string | null;
         sku: string;
-        category: string;
+        categoryId: string | null;
         unit: string;
         minQuantity: number;
         price: number;
-        description: string | null;
         quantity: number;
     }>;
 }

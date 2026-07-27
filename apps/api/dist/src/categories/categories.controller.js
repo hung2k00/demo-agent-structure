@@ -12,67 +12,53 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProductsController = void 0;
+exports.CategoriesController = void 0;
 const common_1 = require("@nestjs/common");
-const products_service_1 = require("./products.service");
-const create_product_dto_1 = require("./dto/create-product.dto");
+const categories_service_1 = require("./categories.service");
+const create_category_dto_1 = require("./dto/create-category.dto");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
 const client_1 = require("@prisma/client");
-let ProductsController = class ProductsController {
-    productsService;
-    constructor(productsService) {
-        this.productsService = productsService;
+let CategoriesController = class CategoriesController {
+    categoriesService;
+    constructor(categoriesService) {
+        this.categoriesService = categoriesService;
     }
     async create(req, dto) {
-        return this.productsService.create(req.user.tenantId, dto);
+        return this.categoriesService.create(req.user.tenantId, dto);
     }
-    async findAll(req, search, category, categoryId) {
-        return this.productsService.findAll(req.user.tenantId, search, category, categoryId);
-    }
-    async findLowStock(req) {
-        return this.productsService.findLowStock(req.user.tenantId);
+    async findAll(req) {
+        return this.categoriesService.findAll(req.user.tenantId);
     }
     async findOne(req, id) {
-        return this.productsService.findOne(req.user.tenantId, id);
+        return this.categoriesService.findOne(req.user.tenantId, id);
     }
     async update(req, id, dto) {
-        return this.productsService.update(req.user.tenantId, id, dto);
+        return this.categoriesService.update(req.user.tenantId, id, dto);
     }
     async remove(req, id) {
-        return this.productsService.remove(req.user.tenantId, id);
+        return this.categoriesService.remove(req.user.tenantId, id);
     }
 };
-exports.ProductsController = ProductsController;
+exports.CategoriesController = CategoriesController;
 __decorate([
     (0, common_1.Post)(),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.WAREHOUSE_MANAGER),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, create_product_dto_1.CreateProductDto]),
+    __metadata("design:paramtypes", [Object, create_category_dto_1.CreateCategoryDto]),
     __metadata("design:returntype", Promise)
-], ProductsController.prototype, "create", null);
+], CategoriesController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.WAREHOUSE_MANAGER, client_1.UserRole.STAFF),
-    __param(0, (0, common_1.Request)()),
-    __param(1, (0, common_1.Query)('search')),
-    __param(2, (0, common_1.Query)('category')),
-    __param(3, (0, common_1.Query)('categoryId')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, String]),
-    __metadata("design:returntype", Promise)
-], ProductsController.prototype, "findAll", null);
-__decorate([
-    (0, common_1.Get)('low-stock'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.WAREHOUSE_MANAGER, client_1.UserRole.STAFF),
     __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], ProductsController.prototype, "findLowStock", null);
+], CategoriesController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)(':id'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.WAREHOUSE_MANAGER, client_1.UserRole.STAFF),
@@ -81,7 +67,7 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
-], ProductsController.prototype, "findOne", null);
+], CategoriesController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Put)(':id'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.WAREHOUSE_MANAGER),
@@ -89,9 +75,9 @@ __decorate([
     __param(1, (0, common_1.Param)('id')),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, create_product_dto_1.UpdateProductDto]),
+    __metadata("design:paramtypes", [Object, String, create_category_dto_1.UpdateCategoryDto]),
     __metadata("design:returntype", Promise)
-], ProductsController.prototype, "update", null);
+], CategoriesController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN),
@@ -100,10 +86,10 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
-], ProductsController.prototype, "remove", null);
-exports.ProductsController = ProductsController = __decorate([
-    (0, common_1.Controller)('products'),
+], CategoriesController.prototype, "remove", null);
+exports.CategoriesController = CategoriesController = __decorate([
+    (0, common_1.Controller)('categories'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
-    __metadata("design:paramtypes", [products_service_1.ProductsService])
-], ProductsController);
-//# sourceMappingURL=products.controller.js.map
+    __metadata("design:paramtypes", [categories_service_1.CategoriesService])
+], CategoriesController);
+//# sourceMappingURL=categories.controller.js.map

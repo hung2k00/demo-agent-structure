@@ -12,9 +12,13 @@ export class CreateProductDto {
   @IsString()
   name: string;
 
-  @IsNotEmpty({ message: 'Danh mục sản phẩm không được để trống' })
+  @IsOptional()
   @IsString()
-  category: string;
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
 
   @IsNotEmpty({ message: 'Đơn vị tính không được để trống' })
   @IsString()
@@ -50,6 +54,10 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
 
   @IsOptional()
   @IsString()

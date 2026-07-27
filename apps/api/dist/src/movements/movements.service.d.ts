@@ -18,16 +18,17 @@ export declare class MovementsService {
         } | null;
         items: ({
             product: {
+                category: string;
                 tenantId: string;
                 id: string;
                 name: string;
                 createdAt: Date;
+                description: string | null;
                 sku: string;
-                category: string;
+                categoryId: string | null;
                 unit: string;
                 minQuantity: number;
                 price: number;
-                description: string | null;
                 quantity: number;
             };
         } & {
@@ -67,16 +68,17 @@ export declare class MovementsService {
         } | null;
         items: ({
             product: {
+                category: string;
                 tenantId: string;
                 id: string;
                 name: string;
                 createdAt: Date;
+                description: string | null;
                 sku: string;
-                category: string;
+                categoryId: string | null;
                 unit: string;
                 minQuantity: number;
                 price: number;
-                description: string | null;
                 quantity: number;
             };
         } & {
@@ -116,16 +118,17 @@ export declare class MovementsService {
         } | null;
         items: ({
             product: {
+                category: string;
                 tenantId: string;
                 id: string;
                 name: string;
                 createdAt: Date;
+                description: string | null;
                 sku: string;
-                category: string;
+                categoryId: string | null;
                 unit: string;
                 minQuantity: number;
                 price: number;
-                description: string | null;
                 quantity: number;
             };
         } & {
@@ -142,16 +145,17 @@ export declare class MovementsService {
         };
         logs: ({
             product: {
+                category: string;
                 tenantId: string;
                 id: string;
                 name: string;
                 createdAt: Date;
+                description: string | null;
                 sku: string;
-                category: string;
+                categoryId: string | null;
                 unit: string;
                 minQuantity: number;
                 price: number;
-                description: string | null;
                 quantity: number;
             };
         } & {
@@ -190,16 +194,17 @@ export declare class MovementsService {
         } | null;
         items: ({
             product: {
+                category: string;
                 tenantId: string;
                 id: string;
                 name: string;
                 createdAt: Date;
+                description: string | null;
                 sku: string;
-                category: string;
+                categoryId: string | null;
                 unit: string;
                 minQuantity: number;
                 price: number;
-                description: string | null;
                 quantity: number;
             };
         } & {
@@ -228,16 +233,17 @@ export declare class MovementsService {
     }>;
     getStockLogs(tenantId: string): Promise<({
         product: {
+            category: string;
             tenantId: string;
             id: string;
             name: string;
             createdAt: Date;
+            description: string | null;
             sku: string;
-            category: string;
+            categoryId: string | null;
             unit: string;
             minQuantity: number;
             price: number;
-            description: string | null;
             quantity: number;
         };
         movement: {

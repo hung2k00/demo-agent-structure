@@ -15,6 +15,7 @@ class CreateProductDto {
     sku;
     name;
     category;
+    categoryId;
     unit;
     minQuantity;
     price;
@@ -35,10 +36,15 @@ __decorate([
     __metadata("design:type", String)
 ], CreateProductDto.prototype, "name", void 0);
 __decorate([
-    (0, class_validator_1.IsNotEmpty)({ message: 'Danh mục sản phẩm không được để trống' }),
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateProductDto.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateProductDto.prototype, "categoryId", void 0);
 __decorate([
     (0, class_validator_1.IsNotEmpty)({ message: 'Đơn vị tính không được để trống' }),
     (0, class_validator_1.IsString)(),
@@ -65,6 +71,7 @@ class UpdateProductDto {
     sku;
     name;
     category;
+    categoryId;
     unit;
     minQuantity;
     price;
@@ -89,6 +96,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateProductDto.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateProductDto.prototype, "categoryId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

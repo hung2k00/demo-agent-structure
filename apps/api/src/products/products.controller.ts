@@ -19,8 +19,13 @@ export class ProductsController {
 
   @Get()
   @Roles(UserRole.ADMIN, UserRole.WAREHOUSE_MANAGER, UserRole.STAFF)
-  async findAll(@Request() req, @Query('search') search?: string, @Query('category') category?: string) {
-    return this.productsService.findAll(req.user.tenantId, search, category);
+  async findAll(
+    @Request() req,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    return this.productsService.findAll(req.user.tenantId, search, category, categoryId);
   }
 
   @Get('low-stock')
